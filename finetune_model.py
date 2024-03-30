@@ -1,15 +1,17 @@
-from datasets import load_dataset, concatenate_datasets, DatasetDict
+from datasets import load_dataset, DatasetDict
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     Trainer,
     TrainingArguments,
+    DataCollatorWithPadding,
 )
 import evaluate
 import numpy as np
 import torch
 import argparse
 import os
+import torch.nn.functional as F
 
 
 def create_arg_parser():
@@ -86,7 +88,7 @@ def create_dataset(
 ) -> DatasetDict:
     """
     This function returns a DatasetDict with the columns 'premise',
-    'hypothesis' and 'label' in the following Datasets:
+    'hypothesis' and 'labels' in the following Datasets:
     train: train data from the GroNLP/ik-nlp-22_transqe dataset
     validation: validation and test data form the GroNLP/ik-nlp-22_transqe dataset
     test: train, validation and test data from the maximedb/sick_nl dataset.
@@ -131,8 +133,11 @@ def create_dataset(
     if language == "nl":
         if score_method.endswith("avg"):
             dataset["train"] = dataset["train"].map(average_qe)
+            dataset["validation"] = dataset["validation"].map(average_qe)
         elif score_method.endswith("lowest"):
             dataset["train"] = dataset["train"].map(lowest_qe)
+            dataset["validation"] = dataset["validation"].map(lowest_qe)
+
         elif score_method == "mix":
             # qe column = mix
             pass
@@ -151,54 +156,30 @@ def create_dataset(
             }
         )
 
-    # # Load in SICK-NL dataset
-    # dataset_sicknl = load_dataset("maximedb/sick_nl")
-
-    # # Rename columns to match base dataset
-    # dataset_sicknl = dataset_sicknl.rename_columns(
-    #     {
-    #         "sentence_A": "premise_nl",
-    #         "sentence_B": "hypothesis_nl",
-    #         "sentence_A_original": "premise_en",
-    #         "sentence_B_original": "hypothesis_en",
-    #     }
-    # )
-
-    # # Concatenate SICK train, validation and test set and add it as test data in the base dataset
-    # dataset["test"] = concatenate_datasets(
-    #     [dataset_sicknl["train"], dataset_sicknl["validation"], dataset_sicknl["test"]]
-    # ).select_columns(
-    #     ["premise_{}".format(language), "hypothesis_{}".format(language), "label"]
-    # )
-
     final_column_renames = {
         "premise_{}".format(language): "premise",
         "hypothesis_{}".format(language): "hypothesis",
+        "label": "labels",
     }
 
     dataset = dataset.rename_columns(final_column_renames)
 
-    select_column_names = ["premise", "hypothesis", "label"]
+    select_column_names = ["premise", "hypothesis", "labels"]
     if language == "nl":
         select_column_names.append("qe")
 
-    print(dataset)
-
-    return DatasetDict(
+    final_dataset = DatasetDict(
         {
             "train": dataset["train"].select_columns(select_column_names),
-            "validation": dataset["validation"].select_columns(
-                ["premise", "hypothesis", "label"]
-            ),
-            "test": dataset["test"],
+            "validation": dataset["validation"].select_columns(select_column_names),
         }
     )
 
+    print(final_dataset)
+    return final_dataset
 
-def tokenize_data(dataset, model_name="GroNLP/bert-base-dutch-cased"):
-    # Load in tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+def tokenize_data(dataset, tokenizer):
     def tokenize_function(example):
         return tokenizer(
             example["premise"],
@@ -210,6 +191,54 @@ def tokenize_data(dataset, model_name="GroNLP/bert-base-dutch-cased"):
 
     # Tokenize premise and hypothesis fields
     return dataset.map(tokenize_function, batched=True)
+
+
+class TrainerWithQeWeights(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        qe_weights = inputs.pop("qe")
+        print("Weights:", qe_weights)
+        outputs = model(**inputs)
+        logits = outputs.logits
+
+        # Convert qe_weights from strings to floats
+        qe_weights = torch.tensor([float(q) for q in qe_weights], device=model.device)
+
+        # Compute the loss for each sample
+        loss_per_sample = F.cross_entropy(
+            logits.view(-1, self.model.config.num_labels),
+            labels.view(-1),
+            reduction="none",
+        )
+
+        # Check if qe weights are there and have the correct shape
+        if qe_weights is not None and qe_weights.shape[0] == loss_per_sample.shape[0]:
+            # Apply sample weights and calculate average
+            weighted_loss = loss_per_sample * qe_weights
+            loss = weighted_loss.mean()
+            print("loss: ", loss)
+        else:
+            # if no or missing weights, compute mean loss without weights
+            loss = loss_per_sample.mean()
+
+        if return_outputs:
+            return (loss, outputs)
+        return loss
+
+
+def scale_qe_weights(dataset):
+    qe_scores = dataset["qe"]
+    # Convert the list to a NumPy array
+    qe_scores_array = np.array(qe_scores).astype(float)
+
+    # Calculate the min and max of the array
+    min_score = qe_scores_array.min()
+    max_score = qe_scores_array.max()
+
+    # Calculate and return the scaled scores
+    scaled_scores = ((qe_scores_array - min_score) / (max_score - min_score)).tolist()
+    print("Nr of scaled scores:", len(scaled_scores))
+    return scaled_scores
 
 
 def train_model(
@@ -232,6 +261,10 @@ def train_model(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
+    remove_unused_columns = True
+    if weighted_loss:
+        remove_unused_columns = False
+
     # Define training arguments
     training_args = TrainingArguments(
         per_device_train_batch_size=batch_size,
@@ -244,16 +277,26 @@ def train_model(
         fp16=True,
         dataloader_drop_last=True,
         gradient_accumulation_steps=4,
+        remove_unused_columns=remove_unused_columns,
     )
 
     # Initialize trainer
-    trainer = Trainer(
-        model=model.to(device),
-        args=training_args,
-        train_dataset=tokenized_dataset["train"],
-        eval_dataset=tokenized_dataset["validation"],
-        compute_metrics=compute_metrics,
-    )
+    if weighted_loss:
+        trainer = TrainerWithQeWeights(
+            model=model.to(device),
+            args=training_args,
+            train_dataset=tokenized_dataset["train"],
+            eval_dataset=tokenized_dataset["validation"],
+            compute_metrics=compute_metrics,
+        )
+    else:
+        trainer = Trainer(
+            model=model.to(device),
+            args=training_args,
+            train_dataset=tokenized_dataset["train"],
+            eval_dataset=tokenized_dataset["validation"],
+            compute_metrics=compute_metrics,
+        )
 
     # Train and return model
     trainer.train()
@@ -261,6 +304,7 @@ def train_model(
 
 
 if __name__ == "__main__":
+    print("debug23")
     args = create_arg_parser()
 
     if args.language == "nl":
@@ -275,14 +319,30 @@ if __name__ == "__main__":
         language=args.language,
     )
 
-    tokenized_dataset = tokenize_data(dataset, model_name=model_name)
+    scaled_qe_weights = scale_qe_weights(dataset["train"])
 
-    trainer = train_model(
-        tokenized_dataset,
-        model_name=model_name,
-        nr_epochs=args.nr_epochs,
-        batch_size=args.batch_size,
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, max_length=512, padding=True, truncation=True
     )
+    tokenized_dataset = tokenize_data(dataset, tokenizer)
+    # # if mqm: scale qe score
+    # tokenized_dataset['train'] = tokenized_dataset['train'].remove_columns(['qe'])
+
+    if args.weighted_loss:
+        trainer = train_model(
+            tokenized_dataset,
+            model_name=model_name,
+            nr_epochs=args.nr_epochs,
+            batch_size=args.batch_size,
+            weighted_loss=True,
+        )
+    else:
+        trainer = train_model(
+            tokenized_dataset,
+            model_name=model_name,
+            nr_epochs=args.nr_epochs,
+            batch_size=args.batch_size,
+        )
 
     if args.save_model:
         save_path = "bert_{language}_th{qe_threshold}_{score_method}_e{nr_epochs}_b{batch_size}".format(
@@ -297,11 +357,4 @@ if __name__ == "__main__":
         if args.save_folder:
             save_path = os.path.join(args.save_folder, save_path)
         trainer.save_model(save_path)
-
-    # # Get predictions on test set and save them to a csv file
-    # predictions = trainer.predict(tokenized_dataset["test"])
-    # predicted_labels = predictions.predictions.argmax(axis=1)
-    # test_dataset_with_predictions = dataset["test"].add_column(
-    #     "predicted_label", predicted_labels
-    # )
-    # test_dataset_with_predictions.to_csv("predictions_nl_full_5epochs.csv", index=False)
+    print("File saved as in folder: {}".format(save_path))
