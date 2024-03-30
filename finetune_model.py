@@ -121,6 +121,11 @@ def create_dataset(
         hypothesis = float(example["{}_hypothesis".format(score_type)])
         example["qe"] = min(premise, hypothesis)
         return example
+    
+    def scale_mqm(example):
+        example['mqm_premise'] = float(example["mqm_premise"]) / 0.2
+        example['mqm_hypothesis'] = float(example["mqm_hypothesis"]) / 0.2
+        return example
 
     if score_method.startswith("da"):
         score_type = "da"
@@ -131,6 +136,9 @@ def create_dataset(
     dataset = load_dataset("GroNLP/ik-nlp-22_transqe")
 
     if language == "nl":
+        # Scale mqm score to a 0-1 scale
+        dataset['train'] = dataset['train'].map(scale_mqm)
+        dataset['validation'] = dataset['validation'].map(scale_mqm)
         if score_method.endswith("avg"):
             dataset["train"] = dataset["train"].map(average_qe)
             dataset["validation"] = dataset["validation"].map(average_qe)
@@ -226,21 +234,6 @@ class TrainerWithQeWeights(Trainer):
         return loss
 
 
-def scale_qe_weights(dataset):
-    qe_scores = dataset["qe"]
-    # Convert the list to a NumPy array
-    qe_scores_array = np.array(qe_scores).astype(float)
-
-    # Calculate the min and max of the array
-    min_score = qe_scores_array.min()
-    max_score = qe_scores_array.max()
-
-    # Calculate and return the scaled scores
-    scaled_scores = ((qe_scores_array - min_score) / (max_score - min_score)).tolist()
-    print("Nr of scaled scores:", len(scaled_scores))
-    return scaled_scores
-
-
 def train_model(
     tokenized_dataset,
     model_name="GroNLP/bert-base-dutch-cased",
@@ -304,7 +297,7 @@ def train_model(
 
 
 if __name__ == "__main__":
-    print("debug23")
+    print("debug25")
     args = create_arg_parser()
 
     if args.language == "nl":
@@ -319,14 +312,10 @@ if __name__ == "__main__":
         language=args.language,
     )
 
-    scaled_qe_weights = scale_qe_weights(dataset["train"])
-
     tokenizer = AutoTokenizer.from_pretrained(
         model_name, max_length=512, padding=True, truncation=True
     )
     tokenized_dataset = tokenize_data(dataset, tokenizer)
-    # # if mqm: scale qe score
-    # tokenized_dataset['train'] = tokenized_dataset['train'].remove_columns(['qe'])
 
     if args.weighted_loss:
         trainer = train_model(
