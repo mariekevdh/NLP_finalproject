@@ -103,7 +103,7 @@ def create_dataset(
 
     Arguments:
     qe_threshold (float, optional): Quality Estimation score threshold. A float between 0 and 1 (default 0.0).
-    score_method (str, optional): Type of qe score used for filtering. Can be 'da_lowest', 'da_avg', 'mqm_lowest', 'mqm_avg' or 'mix' (default 'da_avg').
+    score_method (str, optional): Type of qe score used for filtering. Can be 'da_lowest', 'da_avg', 'mqm_lowest', 'mqm_avg' or 'mix_avg' or 'mix_lowest' (default 'da_avg').
     qe_mix_da_weight (float, optional): Weight of 'da' score in mixed qe score. A float between 0 and 1 (default 0.5).
     language (str, optional): Language of training data. Can be 'nl' or 'en' (default 'nl').
 
@@ -121,24 +121,39 @@ def create_dataset(
         hypothesis = float(example["{}_hypothesis".format(score_type)])
         example["qe"] = min(premise, hypothesis)
         return example
-    
+
     def scale_mqm(example):
-        example['mqm_premise'] = float(example["mqm_premise"]) / 0.2
-        example['mqm_hypothesis'] = float(example["mqm_hypothesis"]) / 0.2
+        example["mqm_premise"] = float(example["mqm_premise"]) / 0.2
+        example["mqm_hypothesis"] = float(example["mqm_hypothesis"]) / 0.2
+        return example
+
+    qe_mix_da_weight = float(qe_mix_da_weight)
+    def mix_scores(example):
+        example["mix_premise"] = float(
+            example["da_premise"]
+        ) * qe_mix_da_weight + float(example["mqm_premise"]) * (1 - qe_mix_da_weight)
+        example["mix_hypothesis"] = float(
+            example["da_hypothesis"]
+        ) * qe_mix_da_weight + float(example["mqm_hypothesis"]) * (1 - qe_mix_da_weight)
         return example
 
     if score_method.startswith("da"):
         score_type = "da"
     elif score_method.startswith("mqm"):
         score_type = "mqm"
+    elif score_method.startswith("mix"):
+        score_type = "mix"
 
     # Load in base dataset
     dataset = load_dataset("GroNLP/ik-nlp-22_transqe")
 
     if language == "nl":
         # Scale mqm score to a 0-1 scale
-        dataset['train'] = dataset['train'].map(scale_mqm)
-        dataset['validation'] = dataset['validation'].map(scale_mqm)
+        dataset["train"] = dataset["train"].map(scale_mqm)
+        dataset["validation"] = dataset["validation"].map(scale_mqm)
+        if score_type == "mix":
+            dataset["train"] = dataset["train"].map(mix_scores)
+            dataset["validation"] = dataset["validation"].map(mix_scores)
         if score_method.endswith("avg"):
             dataset["train"] = dataset["train"].map(average_qe)
             dataset["validation"] = dataset["validation"].map(average_qe)
@@ -146,9 +161,6 @@ def create_dataset(
             dataset["train"] = dataset["train"].map(lowest_qe)
             dataset["validation"] = dataset["validation"].map(lowest_qe)
 
-        elif score_method == "mix":
-            # qe column = mix
-            pass
 
     if qe_threshold > 0.0:
         filtered_train_data = dataset["train"].filter(
@@ -205,7 +217,6 @@ class TrainerWithQeWeights(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.pop("labels")
         qe_weights = inputs.pop("qe")
-        print("Weights:", qe_weights)
         outputs = model(**inputs)
         logits = outputs.logits
 
@@ -224,7 +235,6 @@ class TrainerWithQeWeights(Trainer):
             # Apply sample weights and calculate average
             weighted_loss = loss_per_sample * qe_weights
             loss = weighted_loss.mean()
-            print("loss: ", loss)
         else:
             # if no or missing weights, compute mean loss without weights
             loss = loss_per_sample.mean()
@@ -297,7 +307,6 @@ def train_model(
 
 
 if __name__ == "__main__":
-    print("debug25")
     args = create_arg_parser()
 
     if args.language == "nl":
