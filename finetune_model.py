@@ -326,21 +326,13 @@ if __name__ == "__main__":
     )
     tokenized_dataset = tokenize_data(dataset, tokenizer)
 
-    if args.weighted_loss:
-        trainer = train_model(
-            tokenized_dataset,
-            model_name=model_name,
-            nr_epochs=args.nr_epochs,
-            batch_size=args.batch_size,
-            weighted_loss=True,
-        )
-    else:
-        trainer = train_model(
-            tokenized_dataset,
-            model_name=model_name,
-            nr_epochs=args.nr_epochs,
-            batch_size=args.batch_size,
-        )
+    trainer = train_model(
+        tokenized_dataset,
+        model_name=model_name,
+        nr_epochs=args.nr_epochs,
+        batch_size=args.batch_size,
+        weighted_loss=args.weighted_loss,
+    )
 
     if args.save_model:
         save_path = "bert_{language}_th{qe_threshold}_{score_method}_e{nr_epochs}_b{batch_size}".format(
