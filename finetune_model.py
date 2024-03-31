@@ -4,7 +4,6 @@ from transformers import (
     AutoModelForSequenceClassification,
     Trainer,
     TrainingArguments,
-    DataCollatorWithPadding,
 )
 import evaluate
 import numpy as np
@@ -128,6 +127,7 @@ def create_dataset(
         return example
 
     qe_mix_da_weight = float(qe_mix_da_weight)
+
     def mix_scores(example):
         example["mix_premise"] = float(
             example["da_premise"]
@@ -161,12 +161,9 @@ def create_dataset(
             dataset["train"] = dataset["train"].map(lowest_qe)
             dataset["validation"] = dataset["validation"].map(lowest_qe)
 
-
     if qe_threshold > 0.0:
         filtered_train_data = dataset["train"].filter(
-            lambda example: float(example["{}_premise".format(score_type)])
-            >= qe_threshold
-            and float(example["{}_hypothesis".format(score_type)]) >= qe_threshold
+            lambda example: float(example["qe"]) >= qe_threshold
         )
         dataset = DatasetDict(
             {
@@ -342,8 +339,11 @@ if __name__ == "__main__":
             nr_epochs=args.nr_epochs,
             batch_size=args.batch_size,
         )
+        if args.score_method.startswith("mix"):
+            save_path += "_daweight{}".format(args.qe_mix_da_weight)
         if args.weighted_loss:
             save_path += "_wl"
+
         if args.save_folder:
             save_path = os.path.join(args.save_folder, save_path)
         trainer.save_model(save_path)
