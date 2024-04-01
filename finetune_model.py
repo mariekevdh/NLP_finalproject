@@ -209,7 +209,6 @@ def create_dataset(
         }
     )
 
-    print(final_dataset)
     return final_dataset
 
 
@@ -336,6 +335,8 @@ if __name__ == "__main__":
         language=args.language,
         baseline=args.baseline
     )
+
+    print(dataset)
 
     if not args.check_data:
         tokenizer = AutoTokenizer.from_pretrained(
