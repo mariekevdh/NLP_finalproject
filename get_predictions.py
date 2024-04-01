@@ -1,5 +1,5 @@
 from transformers import AutoTokenizer, pipeline, AutoModelForSequenceClassification
-from datasets import load_dataset, concatenate_datasets, DatasetDict
+from datasets import load_dataset, DatasetDict
 import argparse
 import os
 import torch
@@ -37,20 +37,12 @@ def create_dataset():
         }
     )
 
-    concatenated_dataset = concatenate_datasets(
-        [
-            dataset_sicknl["train"],
-            dataset_sicknl["validation"],
-            dataset_sicknl["test"],
-        ]
-    )
-
     return DatasetDict(
         {
-            "nl": concatenated_dataset.select_columns(
+            "nl": dataset_sicknl["test"].select_columns(
                 ["premise", "hypothesis", "label"]
             ),
-            "en": concatenated_dataset.select_columns(
+            "en": dataset_sicknl["test"].select_columns(
                 ["premise_en", "hypothesis_en", "label"]
             ).rename_columns({"premise_en": "premise", "hypothesis_en": "hypothesis"}),
         }
@@ -93,6 +85,7 @@ def get_predictions(dataset, model_name, tokenizer_name):
 
 
 if __name__ == "__main__":
+    print('test')
     args = create_arg_parser()
     models_folder = args.model_folder
     output_folder = args.output_folder
@@ -111,14 +104,12 @@ if __name__ == "__main__":
                     test_data["nl"], full_path, "GroNLP/bert-base-dutch-cased"
                 )
                 output_data = test_data["nl"].add_column("predictions", predictions)
-                output_data = output_data.add_column("confidence", confidence_scores)
-                output_data.to_csv(output_path)
-                print("Predictions saved as {}".format(output_path))
             elif model_name.startswith("bert_en"):
                 predictions, confidence_scores = get_predictions(
                     test_data["en"], full_path, "google-bert/bert-base-cased"
                 )
                 output_data = test_data["en"].add_column("predictions", predictions)
-                output_data = output_data.add_column("confidence", confidence_scores)
-                output_data.to_csv(output_path)
-                print("Predictions saved as {}".format(output_path))
+            output_data = output_data.add_column("confidence", confidence_scores)
+            output_data.remove_columns("concatenated_input")
+            output_data.to_csv(output_path)
+            print("Predictions saved as {}".format(output_path))
