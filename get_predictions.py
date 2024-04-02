@@ -141,7 +141,6 @@ def get_predictions(
 
 
 if __name__ == "__main__":
-    print("final check123")
     args = create_arg_parser()
     models_folder = args.model_folder
     output_folder = args.output_folder
