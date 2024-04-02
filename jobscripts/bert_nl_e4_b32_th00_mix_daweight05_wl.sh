@@ -11,4 +11,4 @@ python3 -m venv $HOME/venvs/nlp_fp
 
 source $HOME/venvs/nlp_fp/bin/activate
 
-python3 finetune_model.py -qe 'mix_avg' -th 0.25
+python3 finetune_model.py -qe 'mix' -wl True

@@ -11,4 +11,4 @@ python3 -m venv $HOME/venvs/nlp_fp
 
 source $HOME/venvs/nlp_fp/bin/activate
 
-python3 finetune_model.py
+python3 finetune_model.py -th 0.7
