@@ -3,6 +3,7 @@ datasets
 transformers
 evaluate
 numpy
+pandas
 torch
 scikit-learn
 argparse
