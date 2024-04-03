@@ -96,7 +96,11 @@ def create_arg_parser() -> argparse.Namespace:
         help="Indicates whether or not to save the fine-tuned model",
     )
     parser.add_argument(
-        "-sf", "--save_folder", type=str, help="Folder to save the model in"
+        "-sf",
+        "--save_folder",
+        type=str,
+        help="Folder to save the model in",
+        default="models/",
     )
 
     args = parser.parse_args()
