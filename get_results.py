@@ -83,7 +83,7 @@ def create_dataset(
         example["mqm_hypothesis"] = float(example["mqm_hypothesis"]) / 0.2
         return example
 
-    qe_mix_da_weight = float(qe_mix_da_weight)
+    da_weight = float(qe_mix_da_weight)
 
     def mix_scores(example: dict) -> dict:
         """
@@ -91,12 +91,12 @@ def create_dataset(
         based on a specified weight for the da score in each example. Adds the mixed scores as
         'mix_premise' and 'mix_hypothesis' to the example.
         """
-        example["mix_premise"] = float(
-            example["da_premise"]
-        ) * qe_mix_da_weight + float(example["mqm_premise"]) * (1 - qe_mix_da_weight)
-        example["mix_hypothesis"] = float(
-            example["da_hypothesis"]
-        ) * qe_mix_da_weight + float(example["mqm_hypothesis"]) * (1 - qe_mix_da_weight)
+        example["mix_premise"] = float(example["da_premise"]) * da_weight + float(
+            example["mqm_premise"]
+        ) * (1 - da_weight)
+        example["mix_hypothesis"] = float(example["da_hypothesis"]) * da_weight + float(
+            example["mqm_hypothesis"]
+        ) * (1 - da_weight)
         return example
 
     def swap_values(example: dict) -> dict:
@@ -181,6 +181,12 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
         model_table = language
         if weighted_loss:
             model_table += " (WL)"
+        qe_threshold, score_method, score_method_table, qe_mix_da_weight = (
+            0.0,
+            "da",
+            "da",
+            0.5,
+        )
         if not baseline:
             qe_threshold = float(file_name_parts[4][2:])
             if "mix" in file_name_parts:
@@ -193,12 +199,6 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
                     file_name_parts[5],
                 )
         else:
-            qe_threshold, score_method, score_method_table, qe_mix_da_weight = (
-                0.0,
-                "da",
-                "da",
-                0.5,
-            )
             model_table = language + " baseline"
 
         df = pd.read_csv(os.path.join(predictions_folder, file_name))
