@@ -25,7 +25,7 @@ def create_arg_parser() -> argparse.Namespace:
         "-out",
         "--output_folder",
         type=str,
-        help="Folder to save the prediction files in. Should be an existing folder.",
+        help="Folder to save the prediction files in.",
         default="predictions/",
     )
 
@@ -151,8 +151,6 @@ if __name__ == "__main__":
     # Check if model and output folders exist
     if not os.path.isdir(models_folder):
         print(f"The path {models_folder} does not exist or is not a directory.")
-        if not os.path.isdir(output_folder):
-            print(f"The path {output_folder} does not exist or is not a directory.")
     else:
         # Loop though models in model folder to get predictions
         for model_name in os.listdir(models_folder):
@@ -161,15 +159,13 @@ if __name__ == "__main__":
             output_path = os.path.join(output_folder, model_name + ".csv")
             output_data = None
             if model_name.startswith("bert_nl"):
-                # If the model is Dutch, use Dutch data to get predictions,
-                # save predictions in empty Dataset
+                # If the model is Dutch, use Dutch data to get predictions
                 predictions, confidence_scores = get_predictions(
                     test_data["nl"], full_path, "GroNLP/bert-base-dutch-cased"
                 )
                 output_data = test_data["nl"].add_column("predictions", predictions)
             elif model_name.startswith("bert_en"):
-                # If the model is English, use English data to get predictions,
-                # save predictions in empty Dataset
+                # If the model is English, use English data to get predictions
                 predictions, confidence_scores = get_predictions(
                     test_data["en"], full_path, "google-bert/bert-base-cased"
                 )
@@ -177,6 +173,10 @@ if __name__ == "__main__":
             # Add confidence scores to dataset with predictions and remove concatenated_input
             output_data = output_data.add_column("confidence", confidence_scores)
             output_data = output_data.remove_columns("concatenated_input")
+            # Check if output folder exists, if not: create it
+            if not os.path.isdir(output_folder):
+                os.makedirs(output_folder)
+                print(f"Created output folder: {output_folder}")
             # Save final dataset original data and predictions and confidence scores to csv file.
             output_data.to_csv(output_path)
             print("Predictions saved as {}".format(output_path))
