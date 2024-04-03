@@ -266,8 +266,8 @@ if __name__ == "__main__":
 
     df_results = get_results(args.predictions_folder)
 
-    # Save results sorted by accuracy to csv file
-    df_results.round(3).sort_values("accuracy", ascending=False).reset_index(
+    # Save results sorted by weighted avg f1 score to csv file
+    df_results.round(3).sort_values("weighted_avg_f1", ascending=False).reset_index(
         drop=True
     ).to_csv(args.outfile, index=False)
     print(f"Results saved in {args.outfile}")
