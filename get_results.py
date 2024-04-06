@@ -33,7 +33,7 @@ def create_arg_parser() -> argparse.Namespace:
     return args
 
 
-def create_dataset(
+def create_train_dataset(
     qe_threshold: float = 0.0,
     score_method: str = "da",
     qe_mix_da_weight: float = 0.5,
@@ -202,8 +202,6 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
             model_table = language + " baseline"
 
         df = pd.read_csv(os.path.join(predictions_folder, file_name))
-        # Change sick labels so they match the transQE dataset
-        df["label"] = df["label"].replace({0: 2, 2: 0})
 
         # Create classification report
         cr = classification_report(
@@ -215,7 +213,7 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
         )
 
         # Recreate dataset to get statistics
-        df_dataset = create_dataset(
+        df_dataset = create_train_dataset(
             qe_threshold=float(qe_threshold),
             score_method=score_method,
             qe_mix_da_weight=float(qe_mix_da_weight),
