@@ -180,9 +180,9 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
         language = file_name_parts[1]
         baseline = "baseline" in file_name_parts
         weighted_loss = "wl" in file_name_parts
-        test_data = "SICK-(NL)"
+        test_data = f"SICK ({language})"
         if "transqe" in file_name_parts:
-            test_data = "TransQE"
+            test_data = f"TransQE ({language})"
         model_table = language
         if weighted_loss:
             model_table += " (WL)"
@@ -199,14 +199,14 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
         )
         if not baseline:
             qe_threshold = float(file_name_parts[4][2:])
-            train_data = "TransQE"
+            train_data = f"TransQE ({language})"
             if "mix" in file_name_parts:
                 qe_mix_da_weight = file_name_parts[6][8:]
                 qe_mix_da_weight_table = qe_mix_da_weight
             score_method = file_name_parts[5]
         else:
             model_table = language + " baseline"
-            train_data = "SICK-(NL)"
+            train_data = f"SICK ({language})"
 
         df = pd.read_csv(os.path.join(predictions_folder, file_name))
 
