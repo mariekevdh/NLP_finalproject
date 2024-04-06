@@ -101,7 +101,7 @@ def create_train_dataset(
 
     def swap_values(example: dict) -> dict:
         """
-        Swaps the labels 0 and 2 in a given example. This is needed for the SICK-NL dataset
+        Swaps the labels 0 and 2 in a given example. This is needed for the SICK-(NL) dataset
         to match the TransQE dataset.
         """
         if example["label"] == 0:
@@ -147,11 +147,11 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: A DataFrame containing the aggregated results in the following columns:
-            - "model": Indicates whether a Dutch ('nl') or English ('en') model was used.
-              For baseline models, 'baseline' is added. If weighted loss was used, 'WL' is added.
             - "model_full_name": full name of the model so that it can be linked to prediction files again.
             - "score_method": The score method used ('da', 'mqm' or 'mix'). If 'mix', the da-weight is added as well.
+            - "da_weight": Weight of DA score if score method is 'mix'.
             - "threshold": The quality estimation threshold used to filter examples.
+            - "weighted_loss": Whether weighted loss was used (True or False).
             - "E_precision": Precision for the Entailment label.
             - "E_recall": Recall for the Entailment label.
             - "E_f1": F1-score for the Entailment label.
@@ -169,6 +169,8 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
             - "N_train_ex": Number of training examples for the Neutral label.
             - "C_train_ex": Number of training examples for the Contradiction label.
             - "total_train_ex": Total number of training examples used.
+            - "test_data": Dataset used for predictions: SICK(-NL) or TransQE.
+            - "train_data": Dataset used for training: SICK(-NL) or TransQE.
     """
     df_results = pd.DataFrame()
 
@@ -178,35 +180,40 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
         language = file_name_parts[1]
         baseline = "baseline" in file_name_parts
         weighted_loss = "wl" in file_name_parts
+        test_data = "SICK-(NL)"
+        if "transqe" in file_name_parts:
+            test_data = "TransQE"
         model_table = language
         if weighted_loss:
             model_table += " (WL)"
-        qe_threshold, score_method, score_method_table, qe_mix_da_weight = (
+        (
+            qe_threshold,
+            score_method,
+            qe_mix_da_weight,
+            qe_mix_da_weight_table,
+        ) = (
             0.0,
             "da",
-            "da",
             0.5,
+            "-",
         )
         if not baseline:
             qe_threshold = float(file_name_parts[4][2:])
+            train_data = "TransQE"
             if "mix" in file_name_parts:
                 qe_mix_da_weight = file_name_parts[6][8:]
-                score_method = "mix"
-                score_method_table = score_method + " (da: {})".format(qe_mix_da_weight)
-            else:
-                score_method, score_method_table = (
-                    file_name_parts[5],
-                    file_name_parts[5],
-                )
+                qe_mix_da_weight_table = qe_mix_da_weight
+            score_method = file_name_parts[5]
         else:
             model_table = language + " baseline"
+            train_data = "SICK-(NL)"
 
         df = pd.read_csv(os.path.join(predictions_folder, file_name))
 
         # Create classification report
         cr = classification_report(
             y_true=df["label"],
-            y_pred=df["predictions"],
+            y_pred=df["prediction"],
             labels=[0, 1, 2],
             target_names=["Entailment", "Neutral", "Contradiction"],
             output_dict=True,
@@ -225,10 +232,11 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
         df_new_entry = pd.DataFrame(
             [
                 {
-                    "model": model_table,
                     "model_full_name": file_name[:-4],
-                    "score_method": score_method_table,
+                    "score_method": score_method,
+                    "da_weight": qe_mix_da_weight_table,
                     "threshold": qe_threshold,
+                    "weighted_loss": weighted_loss,
                     "E_precision": cr["Entailment"]["precision"],
                     "E_recall": cr["Entailment"]["recall"],
                     "E_f1": cr["Entailment"]["f1-score"],
@@ -246,6 +254,8 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
                     "N_train_ex": df_dataset["label"].value_counts()[1],
                     "C_train_ex": df_dataset["label"].value_counts()[2],
                     "total_train_ex": len(df_dataset),
+                    "test_data": test_data,
+                    "train_data": train_data,
                 }
             ]
         )
