@@ -1,7 +1,5 @@
 #!/bin/bash
-#SBATCH --time=12:00:00
-#SBATCH --gpus-per-node=1
-#SBATCH --partition=gpu
+#SBATCH --time=08:00:00
 #SBATCH --mem=4000
 
 module purge
@@ -11,4 +9,4 @@ python3 -m venv $HOME/venvs/nlp_fp
 
 source $HOME/venvs/nlp_fp/bin/activate
 
-python3 finetune_model.py -qe 'mix' -w 0.6 -th 0.5
+python3 get_results.py -pf 'predictions/'
