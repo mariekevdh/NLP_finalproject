@@ -52,7 +52,7 @@ def create_train_dataset(
             the premise- and hypothesis-score will be used for filtering.
             Defaults to 0.0, which includes all examples.
         score_method (str, optional): The scoring method to use. Can be 'da' (Direct Assessment),
-            'mqm' (Multidimensional Quality Metrics), or 'mix' for a weighted mix of 'da' and 'mqm' scores.
+            'mqm' (Multidimensional Quality Metrics), or 'mix' for a macro mix of 'da' and 'mqm' scores.
             Defaults to 'da'. 'mqm' will be scaled to a 0-1 scale to match 'da'.
         qe_mix_da_weight (float, optional): The weight for the 'da' score in the mixed score calculation.
             Only relevant if `score_method` is set to 'mix'. Defaults to 0.5.
@@ -162,9 +162,9 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
             - "C_recall": Recall for the Contradiction label.
             - "C_f1": F1-score for the Contradiction label.
             - "accuracy": Overall accuracy of the predictions.
-            - "weighted_avg_precision": Weighted average precision across all labels.
-            - "weighted_avg_recall": Weighted average recall across all labels.
-            - "weighted_avg_f1": Weighted average F1-score across all labels.
+            - "macro_avg_precision": Weighted average precision across all labels.
+            - "macro_avg_recall": Weighted average recall across all labels.
+            - "macro_avg_f1": Weighted average F1-score across all labels.
             - "E_train_ex": Number of training examples for the Entailment label.
             - "N_train_ex": Number of training examples for the Neutral label.
             - "C_train_ex": Number of training examples for the Contradiction label.
@@ -247,9 +247,9 @@ def get_results(predictions_folder: str) -> pd.DataFrame:
                     "C_recall": cr["Contradiction"]["recall"],
                     "C_f1": cr["Contradiction"]["f1-score"],
                     "accuracy": cr["accuracy"],
-                    "weighted_avg_precision": cr["weighted avg"]["precision"],
-                    "weighted_avg_recall": cr["weighted avg"]["recall"],
-                    "weighted_avg_f1": cr["weighted avg"]["f1-score"],
+                    "macro_avg_precision": cr["macro avg"]["precision"],
+                    "macro_avg_recall": cr["macro avg"]["recall"],
+                    "macro_avg_f1": cr["macro avg"]["f1-score"],
                     "E_train_ex": df_dataset["label"].value_counts()[0],
                     "N_train_ex": df_dataset["label"].value_counts()[1],
                     "C_train_ex": df_dataset["label"].value_counts()[2],
@@ -274,8 +274,8 @@ if __name__ == "__main__":
 
     df_results = get_results(args.predictions_folder)
 
-    # Save results sorted by weighted avg f1 score to csv file
-    df_results.round(3).sort_values("weighted_avg_f1", ascending=False).reset_index(
+    # Save results sorted by macro avg f1 score to csv file
+    df_results.round(3).sort_values("macro_avg_f1", ascending=False).reset_index(
         drop=True
     ).to_csv(args.outfile, index=False)
     print(f"Results saved in {args.outfile}")
