@@ -22,6 +22,14 @@ def create_arg_parser() -> argparse.Namespace:
         default="models/",
     )
     parser.add_argument(
+        "-mn",
+        "--model_name",
+        type=str,
+        help="Model name. Name of specific model. Use if you want predictions on one model only.\
+            Should exist in folder specified with --mf",
+        default=None,
+    )
+    parser.add_argument(
         "-out",
         "--output_folder",
         type=str,
@@ -162,11 +170,18 @@ if __name__ == "__main__":
     if not os.path.isdir(models_folder):
         print(f"The path {models_folder} does not exist or is not a directory.")
     else:
+        if args.model_name:
+            model_list = [args.model_name]
+        else:
+            model_list = os.listdir(models_folder)
         # Loop though models in model folder to get predictions
-        for model_name in os.listdir(models_folder):
+        for model_name in model_list:
             # Create full paths using model name
             full_model_path = os.path.join(models_folder, model_name)
-            output_path = os.path.join(output_folder, model_name + ".csv")
+            output_path = os.path.join(output_folder, model_name)
+            if args.dataset == "transqe":
+                output_path += "_transqe"
+            output_path += ".csv"
             if model_name.startswith("bert_nl"):
                 # If the model is Dutch, use Dutch data to get predictions
                 predictions = get_predictions(
