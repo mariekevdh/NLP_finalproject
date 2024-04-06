@@ -186,6 +186,13 @@ def create_dataset(
             example["label"] = 0
         return example
 
+    def qe_one(example: dict) -> dict:
+        """
+        Adds 'qe' column with weight 1. Intended to be used on the validation data.
+        """
+        example["qe"] = 1.0
+        return example
+
     # Load in base datasets
     dataset = load_dataset("GroNLP/ik-nlp-22_transqe")
     dataset_sicknl = load_dataset("maximedb/sick_nl")
@@ -202,6 +209,8 @@ def create_dataset(
 
     # Swap the labels 0 and 2 in the sick dataset
     dataset_sicknl = dataset_sicknl.map(swap_values)
+    # Add sick data as validation data
+    dataset["validation"] = dataset_sicknl["validation"]
 
     if language == "nl":
         # Scale mqm score to a 0-1 scale
@@ -211,11 +220,11 @@ def create_dataset(
             dataset["train"] = dataset["train"].map(mix_scores)
         # Get lowest qe scores between premise and hypothesis
         dataset["train"] = dataset["train"].map(lowest_qe)
+        # Add weight of 1 to validation data
+        dataset["validation"] = dataset["validation"].map(qe_one)
     if baseline:
         # Add sick data as train data
         dataset["train"] = dataset_sicknl["train"]
-    # Add sick data as validation data
-    dataset["validation"] = dataset_sicknl["validation"]
 
     # Filter the dataset on the given threshold
     if qe_threshold > 0.0:
@@ -248,9 +257,7 @@ def create_dataset(
     final_dataset = DatasetDict(
         {
             "train": dataset["train"].select_columns(select_column_names),
-            "validation": dataset["validation"].select_columns(
-                ["premise", "hypothesis", "labels"]
-            ),
+            "validation": dataset["validation"].select_columns(select_column_names),
         }
     )
 
