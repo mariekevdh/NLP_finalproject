@@ -2,8 +2,8 @@ import argparse
 import os
 from typing import Union
 
-import evaluate
 import numpy as np
+from sklearn.metrics import f1_score
 import torch
 import torch.nn.functional as F
 from datasets import Dataset, DatasetDict, load_dataset
@@ -276,7 +276,7 @@ def tokenize_data(dataset: Dataset, tokenizer: PreTrainedTokenizer) -> Dataset:
             example["premise"],
             example["hypothesis"],
             truncation=True,
-            max_length=512,
+            max_length=128,
             padding="max_length",
         )
 
@@ -364,16 +364,16 @@ def train_model(
     Returns:
         Trainer: A trained Trainer with the fine-tuned model.
     """
-    metric = evaluate.load("accuracy", module_type="metric")
 
     def compute_metrics(eval_pred: tuple[np.ndarray, np.ndarray]) -> dict[str, float]:
         """
         Computes the evaluation metrics for the model's predictions.
-        metric should be defined within this function's scope.
         """
         logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
-        return metric.compute(predictions=predictions, references=labels)
+        weighted_f1 = f1_score(labels, predictions, average="weighted")
+        macro_f1 = f1_score(labels, predictions, average="macro")
+        return {"weighted_f1": weighted_f1, "macro_f1": macro_f1}
 
     # Load and finetune model
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=3)
@@ -397,7 +397,6 @@ def train_model(
         save_strategy="no",
         fp16=True,
         dataloader_drop_last=True,
-        gradient_accumulation_steps=4,
         remove_unused_columns=remove_unused_columns,
     )
 
@@ -448,9 +447,7 @@ if __name__ == "__main__":
             model_name = "google-bert/bert-base-cased"
 
         # Load in the correct tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name, max_length=512, padding=True, truncation=True
-        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
         tokenized_dataset = tokenize_data(dataset, tokenizer)
 
         # Train the model
@@ -478,5 +475,6 @@ if __name__ == "__main__":
 
             if args.save_folder:
                 save_path = os.path.join(args.save_folder, save_path)
-            trainer.save_model(save_path)
-        print("File saved as in folder: {}".format(save_path))
+            trainer.model.save_pretrained(save_path)
+            tokenizer.save_pretrained(save_path)
+            print("Model and tokenizer saved in folder: {}".format(save_path))
