@@ -1,4 +1,4 @@
-# Translated data for fine-tuning: quantity vs. quality
+# Translated data for NLP
 
 This repository contains the code that was used for the final project of the course Natural Language Processing (LIX001M05) at the University of Groningen. The project explores whether data quantity or quality is more important when fine-tuning a pre-trained language model for an NLI task.
 
