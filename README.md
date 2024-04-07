@@ -4,7 +4,7 @@ This repository contains the code that was used for the final project of the cou
 
 The dataset that we use for fine-tuning is an automatically translated version of the E-SNLI dataset called TransQE. Besides the original premises, hypotheses, labels and explanations, it also contains automatically translated (to Dutch) versions of the text fields, as well as automatically generated quality estimation scores for each text field. The models are evaluated on the SICK-NL dataset, which contains Dutch translations of the SICK dataset that were verified and/or edited by humans.
 
-An overview of our results can be explored using interactive tables in the Jupyter Notebook analysis.ipynb or alternatively on the HTML version of the notebook: https://translated-data-for-finetuning-quantity-vs-quality.tiiny.site/
+An overview of our results can be explored using interactive tables in the Jupyter Notebook analysis.ipynb or alternatively on the HTML version of the notebook: https://translated-data-for-nli.tiiny.site/
 
 ## Experiments
 Our experiments consist of fine-tuning the Dutch BERT-based model BERTje on different subsets of the TransQE dataset filtered based on the different quality estimation scores. As a baseline we use the English BERT model fine-tuned on the original English E-SNLI dataset.
@@ -94,7 +94,7 @@ python finetune_model.py
   **Default**: `"models/"`  
   **Description**: Folder to save the model in.
 
-To get predictions from your fine-tuned model(s), you can use the following script:
+To get predictions from your fine-tuned model(s), you can use the following script. We also share our fine-tuned models which can be found in the Google Drive linked at the end of this file.
 ```bash
 python get_predictions.py
 ```
@@ -145,3 +145,8 @@ python3 get_results.py -pf 'predictions/'
 ### Datasets used
 [🤗 TransQE](https://huggingface.co/datasets/GroNLP/ik-nlp-22_transqe) \
 [🤗 SICK-NL](https://huggingface.co/datasets/maximedb/sick_nl)
+
+### Models created
+To use (one of) our fine-tuned models to get predictions (as explained above), you can download one or all of them from the following Google Drive:
+
+https://drive.google.com/drive/folders/18wuYenLVZj_4J8Li9Lbpgqxwvs31jw5T?usp=sharing
